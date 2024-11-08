@@ -3,13 +3,14 @@ kind: Service
 metadata:
   name: regapp-service
   labels:
-    app: regapp 
+    app: regapp
 spec:
   selector:
-    app: regapp 
+    app: regapp
 
   ports:
     - port: 8080
       targetPort: 8080
+      nodePort: 30080   # Specify the nodePort if you want a fixed port, or leave it out for automatic assignment
 
-  type: LoadBalancer
+  type: NodePort
