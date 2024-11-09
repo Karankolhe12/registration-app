@@ -1,0 +1,58 @@
+pipeline {
+    agent any
+    tools {
+        maven "maven"
+    }
+    stages {
+        stage("Build Maven") {
+            steps {
+                script {
+                    checkout([$class: 'GitSCM', branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/Karankolhe12/registration-app.git']]])
+                    sh 'mvn clean install'
+                }
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    sh 'docker build -t test .'
+                    sh 'rm -rf test.tar'
+                    sh 'docker save -o test.tar localhost/test:latest'
+                    sh 'ssh root@172.20.1.33 "rm -rf /root/test.tar"'
+                    sh 'scp test.tar root@172.20.1.33:/root'
+                    sh 'ssh root@172.20.1.33 "docker load -i /root/test.tar"'
+                    sh 'ssh root@172.20.1.33 "docker tag localhost/test:latest karankolhe099/test"'
+                }
+            }
+        }
+        
+        stage('Push Image to Docker Hub') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'kk', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                        sh """
+                        ssh root@172.20.1.33 'docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}'
+                        """
+                        sh """
+                        ssh root@172.20.1.33 'docker tag localhost/test karankolhe099/test'
+                        """
+                        sh """
+                        ssh root@172.20.1.33 'docker push karankolhe099/test'
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage("Deploy Project on Kubernetes") {
+            steps {
+                script {
+                    sh 'scp regapp-deploy.yml regapp-service.yml root@172.20.1.44:/root'
+                    sh 'ssh root@172.20.1.44 "kubectl apply -f /root/regapp-deploy.yml"'
+                    sh 'ssh root@172.20.1.44 "kubectl apply -f /root/regapp-service.yml"'
+                }
+            }
+        }
+    }
+}
